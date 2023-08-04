@@ -1,52 +1,49 @@
-from model import Model
 import data_utils
-from logger import logger
 import configparser
-from transformers import AdamW
+from transformers import AdamW, TrainingArguments, get_linear_schedule_with_warmup
+from model import Model
 import pandas as pd
 
 
 def main(pre_trained_model, dataset_name):
 
-    if dataset_name == 'snli' or dataset_name == 'multi_nli':
-        num_labels = 3
-    else:
-        logger.error('Dataset Unknown!!')
-
-    train, validation, test = data_utils.load_data(dataset_name)
-
-    train_frame = pd.DataFrame(train.to_pandas())
-    val_frame = pd.DataFrame(validation.to_pandas())
-
     config = configparser.ConfigParser()
     config.read('config.ini')
+    train_df, val_df, test_df = data_utils.load_data(dataset_name)
 
-    learning_rate = config.getfloat('Hyperparameter', 'learning_rate')
-    batch_size = config.getint('Hyperparameter', 'batch_size')
-    num_epochs = config.getint('Hyperparameter', 'num_epochs')
-    num_warmup = config.getint('Hyperparameter', 'num_warmup_steps')
+    model_obj = Model(pre_trained_model, config.getint('IMDB', 'num_labels'))
 
-    save_location = config.get('FilePaths', 'SAVED_MODEL_LOCATION')
+    train_data_loader = data_utils.getDataLoader(train_df, model_obj.tokenizer, config.getint('Hyperparameter', 'per_device_train_batch_size'))
+    validation_data_loader = data_utils.getDataLoader(val_df, model_obj.tokenizer, config.getint('Hyperparameter', 'per_device_eval_batch_size'))
+    test_data_loader = data_utils.getDataLoader(test_df, model_obj.tokenizer, config.getint('Hyperparameter', 'per_device_eval_batch_size'))
 
-    model_obj = Model(num_labels, pre_trained_model)
+    training_args = TrainingArguments(
+        output_dir=config.get('Hyperparameter', 'output_dir'),
+        num_train_epochs=config.getint('Hyperparameter', 'num_train_epochs'),
+        per_device_train_batch_size=config.getint('Hyperparameter', 'per_device_train_batch_size'),
+        per_device_eval_batch_size=config.getint('Hyperparameter', 'per_device_eval_batch_size'),
+        save_steps=config.getfloat('Hyperparameter', 'save_steps'),
+        save_total_limit=config.getint('Hyperparameter', 'save_total_limit'),
+        evaluation_strategy=config.get('Hyperparameter', 'evaluation_strategy'),
+        eval_steps=config.getint('Hyperparameter', 'eval_steps'),
+        logging_steps=config.getint('Hyperparameter', 'logging_steps'),
+        learning_rate=config.getfloat('Hyperparameter', 'learning_rate')
+    )
 
-    train_data_loader = data_utils.getDataLoader(train_frame, model_obj.tokenizer, batch_size)
-    val_data_loader = data_utils.getDataLoader(val_frame, model_obj.tokenizer, batch_size)
+    optimizer = AdamW(model_obj.model.parameters(), lr=config.getfloat('Hyperparameter', 'learning_rate'))
 
-    optimizer = AdamW(model_obj.model.parameters(), lr=learning_rate)
+    scheduler = get_linear_schedule_with_warmup(
+        optimizer,
+        num_warmup_steps=0,
+        num_training_steps=len(train_data_loader) * config.getint('Hyperparameter', 'num_train_epochs')
+    )
 
-    logger.info('Fine Tuning the model...')
+    model_obj.fineTune(training_args, optimizer, scheduler, train_data_loader, validation_data_loader, test_data_loader)
 
-    model_obj.fineTune(num_epochs, num_warmup, optimizer, train_data_loader, val_data_loader)
-
-    logger.info('Trying to save the model....')
-
-    model_obj.saveModel(save_location)
-
-    logger.info('Model Saved!! at'+save_location)
+    return
 
 
 if __name__ == '__main__':
-    main('bert-base-uncased', 'snli')
+    main('bert-base-uncased', 'rotten_tomatoes')
 
 

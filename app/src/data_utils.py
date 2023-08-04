@@ -37,11 +37,21 @@ def load_data(dataset_name):
 
 def getDataLoader(frame, tokenizer, batch_size):
 
-    labels = torch.tensor(frame['label'].tolist()).to(torch.int64)
+    # labels = torch.tensor(frame['label'].tolist()).to(torch.int64)
+    labels = torch.tensor(frame['label'].tolist(), dtype=torch.int64)
 
-    dataset_sentences = tokenizer(frame['premise'].tolist(), frame['hypothesis'].tolist(), padding=True, truncation=True, return_tensors="pt")
-    dataset_tensor = TensorDataset(dataset_sentences.input_ids, dataset_sentences.attention_mask, dataset_sentences.token_type_ids, labels)
+    inputs = tokenizer(frame['text'].tolist(), padding=True, truncation=True, return_tensors="pt")
+    dataset = TensorDataset(inputs['input_ids'], inputs['attention_mask'], inputs['token_type_ids'], labels)
+    data_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+    # dataset_sentences = tokenizer(frame['text'].tolist(), padding=True, truncation=True, return_tensors="pt")
+    # dataset_tensor = TensorDataset(dataset_sentences.input_ids, dataset_sentences.attention_mask, dataset_sentences.token_type_ids, labels)
+    #
+    # data_loader = DataLoader(dataset_tensor, batch_size)
 
-    data_loader = DataLoader(dataset_tensor, batch_size)
+    return dataset
 
-    return data_loader
+
+if __name__ == '__main__':
+    f1, f2, f3 = load_data('imdb')
+    f4, f5, f6 = load_data('rotten_tomatoes')
+    print("test")
