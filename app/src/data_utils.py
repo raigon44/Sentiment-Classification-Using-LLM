@@ -1,5 +1,5 @@
 import pandas as pd
-from datasets import load_dataset
+from datasets import load_dataset, Dataset
 import torch
 from torch.utils.data import TensorDataset, DataLoader
 from sklearn.model_selection import train_test_split
@@ -28,30 +28,10 @@ def load_data(dataset_name):
         train_data, temp_data = train_test_split(combined_IMDB_frame, test_size=1 - train_ratio, random_state=45)
         val_data, test_data = train_test_split(temp_data, test_size=test_ratio / (test_ratio + val_ratio), random_state=45)
 
-        return train_data, val_data, test_data
+        return Dataset.from_pandas(train_data), Dataset.from_pandas(val_data), Dataset.from_pandas(test_data)
 
     elif dataset_name == 'rotten_tomatoes':     # For rotten_tomatoes dataset, I'm using the default split
 
-        return data['train'].to_pandas(), data['validation'].to_pandas(), data['test'].to_pandas()
+        return data['train'], data['validation'], data['test']
 
 
-def getDataLoader(frame, tokenizer, batch_size):
-
-    # labels = torch.tensor(frame['label'].tolist()).to(torch.int64)
-    labels = torch.tensor(frame['label'].tolist(), dtype=torch.int64)
-
-    inputs = tokenizer(frame['text'].tolist(), padding=True, truncation=True, return_tensors="pt")
-    dataset = TensorDataset(inputs['input_ids'], inputs['attention_mask'], inputs['token_type_ids'], labels)
-    data_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
-    # dataset_sentences = tokenizer(frame['text'].tolist(), padding=True, truncation=True, return_tensors="pt")
-    # dataset_tensor = TensorDataset(dataset_sentences.input_ids, dataset_sentences.attention_mask, dataset_sentences.token_type_ids, labels)
-    #
-    # data_loader = DataLoader(dataset_tensor, batch_size)
-
-    return dataset
-
-
-if __name__ == '__main__':
-    f1, f2, f3 = load_data('imdb')
-    f4, f5, f6 = load_data('rotten_tomatoes')
-    print("test")

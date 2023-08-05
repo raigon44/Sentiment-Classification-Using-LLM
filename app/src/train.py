@@ -2,20 +2,25 @@ import data_utils
 import configparser
 from transformers import AdamW, TrainingArguments, get_linear_schedule_with_warmup
 from model import Model
-import pandas as pd
+import torch
 
 
 def main(pre_trained_model, dataset_name):
 
     config = configparser.ConfigParser()
     config.read('config.ini')
-    train_df, val_df, test_df = data_utils.load_data(dataset_name)
+    train_dataset, val_dataset, test_dataset = data_utils.load_data(dataset_name)
+
+    torch.cuda.empty_cache()
 
     model_obj = Model(pre_trained_model, config.getint('IMDB', 'num_labels'))
 
-    train_data_loader = data_utils.getDataLoader(train_df, model_obj.tokenizer, config.getint('Hyperparameter', 'per_device_train_batch_size'))
-    validation_data_loader = data_utils.getDataLoader(val_df, model_obj.tokenizer, config.getint('Hyperparameter', 'per_device_eval_batch_size'))
-    test_data_loader = data_utils.getDataLoader(test_df, model_obj.tokenizer, config.getint('Hyperparameter', 'per_device_eval_batch_size'))
+    def tokenize_text(data_item):
+        return model_obj.tokenizer(data_item['text'], padding="max_length", truncation=True)
+
+    tokenized_train_dataset = train_dataset.map(tokenize_text, batched=True)
+    tokenized_val_dataset = val_dataset.map(tokenize_text, batched=True)
+    tokenized_test_dataset = test_dataset.map(tokenize_text, batched=True)
 
     training_args = TrainingArguments(
         output_dir=config.get('Hyperparameter', 'output_dir'),
@@ -35,10 +40,10 @@ def main(pre_trained_model, dataset_name):
     scheduler = get_linear_schedule_with_warmup(
         optimizer,
         num_warmup_steps=0,
-        num_training_steps=len(train_data_loader) * config.getint('Hyperparameter', 'num_train_epochs')
+        num_training_steps=len(train_dataset) * config.getint('Hyperparameter', 'num_train_epochs')
     )
 
-    model_obj.fineTune(training_args, optimizer, scheduler, train_data_loader, validation_data_loader, test_data_loader)
+    model_obj.fineTune(training_args, optimizer, scheduler, tokenized_train_dataset, tokenized_val_dataset, tokenized_test_dataset)
 
     return
 
