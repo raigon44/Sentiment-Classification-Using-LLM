@@ -1,7 +1,6 @@
-import torch
-from transformers import AutoTokenizer, AutoModelForSequenceClassification, Trainer
-from tqdm.auto import tqdm
-from sklearn.metrics import accuracy_score
+import evaluate
+from transformers import AutoTokenizer, AutoModelForSequenceClassification, Trainer, pipeline
+import numpy as np
 
 
 class Model:
@@ -11,6 +10,13 @@ class Model:
         self.model = AutoModelForSequenceClassification.from_pretrained(modelName)
         self.modelName = modelName
 
+    @staticmethod
+    def compute_metrics(eval_preds):
+        metric = evaluate.load("accuracy")
+        logits, labels = eval_preds
+        predictions = np.argmax(logits, axis=1)
+        return metric.compute(predictions=predictions, references=labels)
+
     def fineTune(self, training_args, optimizer, scheduler, train_dataset, eval_dataset, test_dataset):
 
         trainer = Trainer(
@@ -18,18 +24,28 @@ class Model:
             args=training_args,
             train_dataset=train_dataset,
             eval_dataset=eval_dataset,
-            optimizers=(optimizer, scheduler)
+            optimizers=(optimizer, scheduler),
+            compute_metrics=self.compute_metrics,
         )
 
         trainer.train()
 
+        train_loss = trainer.history["train_loss"]
+        val_loss = trainer.history["eval_loss"]
+
         evaluation_results = trainer.evaluate(test_dataset)
         print(evaluation_results)
 
-        return
+        return train_loss, val_loss
 
     def saveModel(self, location):
         self.model.save_pretrained(location+'/'+self.modelName+'fine_tuned.model')
         return
+
+    def predict(self, input_text):
+        classifier = pipeline("text-classification", model=self.model, tokenizer=self.tokenizer)
+        prediction = classifier(input_text)
+        return prediction
+
 
 

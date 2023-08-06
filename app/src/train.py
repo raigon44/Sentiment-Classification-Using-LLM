@@ -1,3 +1,5 @@
+import matplotlib.pyplot as plt
+
 import data_utils
 import configparser
 from transformers import AdamW, TrainingArguments, get_linear_schedule_with_warmup
@@ -30,9 +32,10 @@ def main(pre_trained_model, dataset_name):
         save_steps=config.getfloat('Hyperparameter', 'save_steps'),
         save_total_limit=config.getint('Hyperparameter', 'save_total_limit'),
         evaluation_strategy=config.get('Hyperparameter', 'evaluation_strategy'),
-        eval_steps=config.getint('Hyperparameter', 'eval_steps'),
+        # eval_steps=config.getint('Hyperparameter', 'eval_steps'),
         logging_steps=config.getint('Hyperparameter', 'logging_steps'),
-        learning_rate=config.getfloat('Hyperparameter', 'learning_rate')
+        learning_rate=config.getfloat('Hyperparameter', 'learning_rate'),
+        logging_dir=config.get('Hyperparameter', 'logging_dir')
     )
 
     optimizer = AdamW(model_obj.model.parameters(), lr=config.getfloat('Hyperparameter', 'learning_rate'))
@@ -43,7 +46,22 @@ def main(pre_trained_model, dataset_name):
         num_training_steps=len(train_dataset) * config.getint('Hyperparameter', 'num_train_epochs')
     )
 
-    model_obj.fineTune(training_args, optimizer, scheduler, tokenized_train_dataset, tokenized_val_dataset, tokenized_test_dataset)
+    train_loss, val_loss = model_obj.fineTune(training_args, optimizer, scheduler, tokenized_train_dataset, tokenized_val_dataset, tokenized_test_dataset)
+
+    plt.figure(figsize=(10, 6))
+
+    # Plot loss
+    plt.plot(train_loss, label="Train Loss")
+    plt.plot(val_loss, label="Validation Loss")
+    plt.xlabel("Epoch")
+    plt.ylabel("Loss")
+    plt.title("Training and Validation Loss")
+    plt.legend()
+
+    plt.tight_layout()
+    plt.show()
+
+    # Call the function to save the model
 
     return
 
